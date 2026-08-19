@@ -12,6 +12,22 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`SecureStore timeout after ${ms}ms`)), ms);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (err) => {
+        clearTimeout(timer);
+        reject(err);
+      }
+    );
+  });
+}
+
 export function useAuth() {
   const context = useContext(AuthContext);
   if (!context) {
@@ -28,22 +44,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
 
   useEffect(() => {
+    let cancelled = false;
+
     async function loadSession() {
       try {
-        const token = await SecureStore.getItemAsync('token');
-        const userData = await SecureStore.getItemAsync('user');
-        
-        if (token) {
+        const token = await withTimeout(SecureStore.getItemAsync('token'), 3000);
+        const userData = await withTimeout(SecureStore.getItemAsync('user'), 3000);
+
+        if (!cancelled && token) {
           setSession(token);
           if (userData) setUser(JSON.parse(userData));
         }
       } catch (e) {
         console.error('[AuthProvider] Error loading session:', e);
       } finally {
-        setIsLoading(false);
+        if (!cancelled) setIsLoading(false);
       }
     }
+
     loadSession();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -52,23 +75,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const inAuthGroup = segments[0] === '(tabs)';
     const isLoginPage = segments[0] === 'login';
 
-    console.log('[AuthProvider] Auth State Check:', {
-      hasSession: !!session,
-      inAuthGroup,
-      isLoginPage,
-      segments
-    });
-
     if (!session && !isLoginPage) {
-      // Si no hay sesión y no estamos ya en login, vamos a login
-      console.log('[AuthProvider] No session, redirecting to login');
       router.replace('/login');
-    } else if (session && isLoginPage) {
-      // Si hay sesión y estamos en login, vamos a las tabs
-      console.log('[AuthProvider] Session found, redirecting to tabs');
+    } else if (session && (isLoginPage || (!inAuthGroup && segments[0] !== 'new-ticket'))) {
       router.replace('/(tabs)');
     }
-  }, [session, isLoading, segments]);
+  }, [session, isLoading, segments, router]);
 
   const signIn = async (token: string, userData: any) => {
     await SecureStore.setItemAsync('token', token);

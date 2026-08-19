@@ -1,10 +1,8 @@
 import { useFonts } from 'expo-font';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { Stack, usePathname, useSegments } from 'expo-router';
+import { Stack } from 'expo-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { useState, useMemo } from 'react';
-
-const queryClient = new QueryClient();
+import { useState, useEffect } from 'react';
 import * as SplashScreen from 'expo-splash-screen';
 
 import { useColorScheme } from '@/components/useColorScheme';
@@ -15,27 +13,39 @@ import { AuthProvider } from '@/features/auth/context/AuthProvider';
 import { logError } from '@/lib/logger';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 
+const queryClient = new QueryClient();
+
 export {
   // Catch any errors thrown by the Layout component.
   ErrorBoundary,
 } from 'expo-router';
 
 export const unstable_settings = {
-  // Ensure that reloading on `/modal` keeps a back button present.
   initialRouteName: 'login',
 };
 
-// Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
+
+async function hideSplash() {
+  try {
+    await SplashScreen.hideAsync();
+  } catch {
+    // Ya oculta o nativa aún no lista
+  }
+}
 
 export default function RootLayout() {
   const [initError, setInitError] = useState<string | null>(null);
   const [dbReady, setDbReady] = useState(false);
 
+  useEffect(() => {
+    hideSplash();
+  }, []);
+
   return (
     <GlobalErrorBoundary>
-      <RootLayoutContent 
-        initError={initError} 
+      <RootLayoutContent
+        initError={initError}
         setInitError={setInitError}
         dbReady={dbReady}
         setDbReady={setDbReady}
@@ -44,93 +54,82 @@ export default function RootLayout() {
   );
 }
 
-function RootLayoutContent({ 
-  initError, 
-  setInitError, 
-  dbReady, 
-  setDbReady 
-}: { 
-  initError: string | null, 
-  setInitError: (err: string | null) => void,
-  dbReady: boolean,
-  setDbReady: (ready: boolean) => void
+function RootLayoutContent({
+  initError,
+  setInitError,
+  dbReady,
+  setDbReady,
+}: {
+  initError: string | null;
+  setInitError: (err: string | null) => void;
+  dbReady: boolean;
+  setDbReady: (ready: boolean) => void;
 }) {
-  try {
-    const [fontsLoaded, fontError] = useFonts({
-      SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
-    });
+  const [, fontError] = useFonts({
+    SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
+  });
 
-    // Capturar errores de fuentes
-    useEffect(() => {
-      if (fontError) {
-        logError(fontError);
-        setInitError(`Error de fuentes: ${fontError.message}`);
-        SplashScreen.hideAsync().catch(() => {});
+  useEffect(() => {
+    if (fontError) {
+      logError(fontError);
+    }
+  }, [fontError]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    // Si fuentes o DB se cuelgan en release, no dejar el splash nativo para siempre.
+    const safety = setTimeout(() => {
+      if (!cancelled) {
+        setDbReady(true);
+        hideSplash();
       }
-    }, [fontError]);
+    }, 4000);
 
-    // Inicialización secuencial y protegida
-    useEffect(() => {
-      async function initialize() {
-        try {
-          console.log('[RootLayout] Starting initialization...');
-          
-          // 1. Dar un respiro inicial antes de tocar la DB para evitar saturación nativa
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          
-          await initDatabase();
-          console.log('[RootLayout] Database initialized');
-          setDbReady(true);
-          
-          // 2. Si las fuentes ya están, ocultar splash
-          if (fontsLoaded) {
-            await SplashScreen.hideAsync();
-            console.log('[RootLayout] Splash screen hidden');
-          }
-        } catch (e: any) {
-          console.error('[RootLayout] Initialization error:', e);
+    async function initialize() {
+      try {
+        await initDatabase();
+        if (!cancelled) setDbReady(true);
+      } catch (e: any) {
+        if (!cancelled) {
           logError(e);
           setInitError(`Error de inicialización: ${e.message || String(e)}`);
-          await SplashScreen.hideAsync().catch(() => {});
+          setDbReady(true);
         }
+      } finally {
+        await hideSplash();
+        clearTimeout(safety);
       }
-      initialize();
-    }, [fontsLoaded]);
-
-    if (initError) {
-      return (
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorTitle}>ERROR CRÍTICO</Text>
-          <Text style={styles.errorText}>{initError}</Text>
-        </View>
-      );
     }
 
-    if (!loaded) {
-      console.log('[RootLayout] Fonts NOT loaded yet');
-    // Mientras cargan fuentes o DB, mostramos un spinner para mantener la UI activa
-    if (!fontsLoaded || !dbReady) {
-      return (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#3b82f6" />
-          <Text style={styles.loadingText}>Cargando Kontrolia...</Text>
-          {!dbReady && <Text style={styles.loadingSubtext}>Preparando base de datos...</Text>}
-        </View>
-      );
-    }
+    initialize();
 
-    console.log('[RootLayout] Fonts LOADED, proceeding to render RootLayoutNav');
-    return <RootLayoutNav />;
-    return <RootLayoutNav />;
-  } catch (fatalError: any) {
-    console.error('[RootLayout] Fatal Crash:', fatalError);
+    return () => {
+      cancelled = true;
+      clearTimeout(safety);
+    };
+  }, []);
+
+  if (initError) {
     return (
       <View style={styles.errorContainer}>
-        <Text style={styles.errorTitle}>ERROR CRÍTICO (FATAL)</Text>
-        <Text style={styles.errorText}>{fatalError?.toString() || 'Error desconocido'}</Text>
+        <Text style={styles.errorTitle}>ERROR CRÍTICO</Text>
+        <Text style={styles.errorText}>{initError}</Text>
       </View>
     );
   }
+
+  if (!dbReady) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#3b82f6" />
+        <Text style={styles.loadingText}>Cargando Kontrolia...</Text>
+        {!dbReady && <Text style={styles.loadingSubtext}>Preparando base de datos...</Text>}
+      </View>
+    );
+  }
+
+  return <RootLayoutNav />;
 }
 
 const styles = StyleSheet.create({
@@ -183,7 +182,7 @@ function RootLayoutNav() {
             <Stack.Screen name="index" options={{ headerShown: false }} />
             <Stack.Screen name="login" options={{ headerShown: false }} />
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-            <Stack.Screen name="new-ticket" options={{ 
+            <Stack.Screen name="new-ticket" options={{
               title: 'Nuevo Ticket',
               presentation: 'modal',
               headerShown: true

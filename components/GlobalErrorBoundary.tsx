@@ -1,6 +1,7 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Clipboard, Modal } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import * as SplashScreen from 'expo-splash-screen';
 import { logError, getLogs, clearLogs } from '../lib/logger';
 
 interface Props {
@@ -28,6 +29,7 @@ export class GlobalErrorBoundary extends Component<Props, State> {
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error('Uncaught error:', error, errorInfo);
+    SplashScreen.hideAsync().catch(() => {});
     logError(error, errorInfo.componentStack || undefined);
   }
 
@@ -122,7 +124,7 @@ export class GlobalErrorBoundary extends Component<Props, State> {
       );
     }
 
-    return this.children;
+    return this.props.children;
   }
 }
 

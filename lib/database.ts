@@ -51,7 +51,15 @@
 //   return dbInstance;
 // };
 
+const stubDb = {
+  runAsync: async () => undefined,
+  getFirstAsync: async () => ({ count: 0 }),
+  getAllAsync: async () => [],
+};
+
 export const initDatabase = async () => {
   console.log('--- DB SIMULADA ---');
-  return {} as any; 
+  return stubDb;
 };
+
+export const getDatabase = async () => stubDb;

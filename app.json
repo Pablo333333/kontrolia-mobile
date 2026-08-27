@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "kontrolia",
-    "slug": "kontrolia",
+    "name": "Conecta",
+    "slug": "conecta",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -15,7 +15,7 @@
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png"
       },
-      "package": "com.kontrolia.app"
+      "package": "com.conecta.app"
     },
     "plugins": [
       "expo-router",

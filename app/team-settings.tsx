@@ -81,7 +81,7 @@ export default function TeamSettingsScreen() {
             <MaterialCommunityIcons name="office-building" size={40} color={team?.primaryColor || '#2563eb'} />
           )}
           <Text style={[styles.teamName, { color: team?.primaryColor || '#2563eb' }]}>
-            {team?.displayName || 'KONTROLIA'}
+            {team?.displayName || 'CONECTA'}
           </Text>
           <Text style={styles.teamId}>Grupo activo: {team?.groupIdentifier || '—'}</Text>
         </View>

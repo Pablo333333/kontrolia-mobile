@@ -141,9 +141,9 @@ function RootLayoutContent({
   if (!dbReady) {
     return (
       <View style={styles.loadingContainer}>
-        <Text style={styles.brand}>KONTROLIA</Text>
+        <Text style={styles.brand}>CONECTA</Text>
         <ActivityIndicator size="large" color="#3b82f6" />
-        <Text style={styles.loadingText}>Cargando Kontrolia...</Text>
+        <Text style={styles.loadingText}>Cargando Conecta...</Text>
         <Text style={styles.loadingSubtext}>Preparando base de datos...</Text>
         <TouchableOpacity style={styles.exitBtnOutline} onPress={handleForceExit}>
           <Text style={styles.exitBtnOutlineText}>Salir</Text>

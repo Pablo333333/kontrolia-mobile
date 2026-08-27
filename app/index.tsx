@@ -20,7 +20,7 @@ export default function Index() {
   if (isLoading) {
     return (
       <View style={styles.container}>
-        <Text style={styles.brand}>KONTROLIA</Text>
+        <Text style={styles.brand}>CONECTA</Text>
         <ActivityIndicator size="large" color="#3b82f6" />
         <Text style={styles.hint}>Restaurando sesión...</Text>
         {showExit && (

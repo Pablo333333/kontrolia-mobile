@@ -27,7 +27,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="tickets"
         options={{
-          title: 'Mis Tickets',
+          title: 'Seguimiento',
           tabBarIcon: ({ color }) => (
             <MaterialCommunityIcons name="file-document" size={28} color={color} />
           ),

@@ -104,6 +104,11 @@ export class OfflineRepository {
                   workflowStateId: payload.workflowStateId || '',
                   ...(payload.type ? { type: payload.type } : {}),
                   ...(payload.destinatarioId ? { destinatarioId: payload.destinatarioId } : {}),
+                  ...(payload.messageType ? { messageType: payload.messageType } : {}),
+                  ...(payload.tramiteSubtype ? { tramiteSubtype: payload.tramiteSubtype } : {}),
+                  ...(payload.responseUrgency ? { responseUrgency: payload.responseUrgency } : {}),
+                  ...(payload.priority ? { priority: payload.priority } : {}),
+                  ...(payload.fechaLimite ? { fechaLimite: payload.fechaLimite } : {}),
                 },
               });
 

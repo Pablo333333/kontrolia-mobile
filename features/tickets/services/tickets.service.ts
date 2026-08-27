@@ -14,18 +14,25 @@ export enum TicketType {
   INFORME = 'INFORME',
 }
 
+export type TicketPriority = 'BAJA' | 'MEDIA' | 'URGENTE';
+
 export interface TicketResponse {
   id: string;
   title?: string;
   description?: string;
   type?: TicketType;
+  categoryId?: string;
+  subcategoryId?: string | null;
+  subcategoryName?: string | null;
   workflowStateId?: string;
+  userId?: string;
+  destinatarioId?: string | null;
   workflowState?: {
     id: string;
     name: string;
   };
-  statusId?: string; // Mantener por retrocompatibilidad temporal
-  statusName?: string; // Ahora opcional por si el backend no lo mapea
+  statusId?: string;
+  statusName?: string;
   categoryName?: string;
   latitude?: number;
   longitude?: number;
@@ -33,6 +40,16 @@ export interface TicketResponse {
   updatedAt?: string;
   remitenteName?: string;
   destinatarioName?: string;
+  priority?: TicketPriority;
+  messageType?: string;
+  tramiteSubtype?: string;
+  responseUrgency?: string;
+  fechaLimite?: string;
+  locationLabel?: string;
+  isArchived?: boolean;
+  parentTicketId?: string;
+  rootTicketId?: string;
+  isContinuation?: boolean;
 }
 
 export interface CreateTicketDto {
@@ -41,14 +58,35 @@ export interface CreateTicketDto {
   type?: TicketType;
   destinatarioId?: string;
   categoryId?: string;
+  subcategoryId?: string;
   workflowStateId?: string;
-  statusId?: string; // Mantener por retrocompatibilidad temporal
+  statusId?: string;
+  messageType?: string;
+  tramiteSubtype?: string;
+  responseUrgency?: string;
+  priority?: TicketPriority;
   fechaLimite?: string;
+  latitude?: number;
+  longitude?: number;
+  locationLabel?: string;
+  parentTicketId?: string;
   audioFile?: {
     uri: string;
     name: string;
     type: string;
   };
+}
+
+export interface SmartDocumentDraftDto {
+  title: string;
+  documentDate?: string;
+  responsible?: string;
+  description?: string;
+  location?: string;
+  priority?: string;
+  attachmentsSummary?: string;
+  tramiteSubtype?: string;
+  subcategoryName?: string;
 }
 
 export const ticketsService = {
@@ -79,8 +117,18 @@ export const ticketsService = {
               description: data.description || '',
               categoryId: data.categoryId || '',
               workflowStateId: data.workflowStateId || '',
+              ...(data.subcategoryId ? { subcategoryId: data.subcategoryId } : {}),
               ...(data.type ? { type: data.type } : {}),
               ...(data.destinatarioId ? { destinatarioId: data.destinatarioId } : {}),
+              ...(data.messageType ? { messageType: data.messageType } : {}),
+              ...(data.tramiteSubtype ? { tramiteSubtype: data.tramiteSubtype } : {}),
+              ...(data.responseUrgency ? { responseUrgency: data.responseUrgency } : {}),
+              ...(data.priority ? { priority: data.priority } : {}),
+              ...(data.fechaLimite ? { fechaLimite: data.fechaLimite } : {}),
+              ...(data.latitude != null ? { latitude: String(data.latitude) } : {}),
+              ...(data.longitude != null ? { longitude: String(data.longitude) } : {}),
+              ...(data.locationLabel ? { locationLabel: data.locationLabel } : {}),
+              ...(data.parentTicketId ? { parentTicketId: data.parentTicketId } : {}),
             },
           });
 
@@ -92,30 +140,57 @@ export const ticketsService = {
           return JSON.parse(response.body);
         }
 
-        console.log('[API] Creando ticket con JSON. Payload:', JSON.stringify(data, null, 2));
-        const response = await api.post<TicketResponse>('/tickets', data);
+        const { audioFile: _audio, ...payload } = data;
+        console.log('[API] Creando ticket con JSON. Payload:', JSON.stringify(payload, null, 2));
+        const response = await api.post<TicketResponse>('/tickets', payload);
         return response.data;
       }
     );
   },
-  findAll: async (): Promise<TicketResponse[]> => {
+  findAll: async (params?: {
+    includeArchived?: boolean;
+    workflowStateId?: string;
+    categoryId?: string;
+    subcategoryId?: string;
+    priority?: string;
+    messageType?: string;
+    userId?: string;
+    destinatarioId?: string;
+    limit?: number;
+  }): Promise<TicketResponse[]> => {
     try {
-      console.log(`[API] Cargando tickets desde: ${api.defaults.baseURL}/tickets`);
-      const response = await api.get<TicketResponse[]>('/tickets');
-      
-      // LOG CRUDO PARA INSPECCIÓN - NO ELIMINAR HASTA CONFIRMAR ESTRUCTURA
-      console.log('[API RAW] Estructura cruda de la respuesta:', JSON.stringify(response.data, null, 2));
-      if (response.data && response.data.length > 0) {
-        console.log('[API RAW] Primer item crudo:', JSON.stringify(response.data[0], null, 2));
-        console.log('[API RAW] Keys del primer item:', Object.keys(response.data[0]));
-      }
-      
-      console.log(`[API] Tickets cargados: ${response.data?.length || 0} items`);
+      const response = await api.get<TicketResponse[]>('/tickets', {
+        params: {
+          ...(params?.includeArchived ? { includeArchived: 'true' } : {}),
+          ...(params?.workflowStateId ? { workflowStateId: params.workflowStateId } : {}),
+          ...(params?.categoryId ? { categoryId: params.categoryId } : {}),
+          ...(params?.subcategoryId ? { subcategoryId: params.subcategoryId } : {}),
+          ...(params?.priority ? { priority: params.priority } : {}),
+          ...(params?.messageType ? { messageType: params.messageType } : {}),
+          ...(params?.userId ? { userId: params.userId } : {}),
+          ...(params?.destinatarioId ? { destinatarioId: params.destinatarioId } : {}),
+          limit: params?.limit ?? 100,
+        },
+      });
       return response.data;
     } catch (error: any) {
       console.error('[API Error] Error al cargar tickets:', error.response?.status, error.message);
       throw error;
     }
+  },
+  search: async (params: {
+    q: string;
+    mode?: 'literal' | 'semantic';
+    limit?: number;
+  }): Promise<TicketResponse[]> => {
+    const response = await api.get<TicketResponse[]>('/tickets/search', {
+      params: {
+        q: params.q,
+        mode: params.mode ?? 'semantic',
+        limit: params.limit ?? 50,
+      },
+    });
+    return response.data;
   },
   findById: async (id: string): Promise<TicketResponse> => {
     const response = await api.get<TicketResponse>(`/tickets/${id}`);
@@ -131,6 +206,14 @@ export const ticketsService = {
         await api.patch(`/tickets/${id}/status`, { newStateId });
       }
     );
+  },
+  openTicket: async (id: string): Promise<{ transitioned: boolean }> => {
+    const response = await api.post<{ transitioned: boolean }>(`/tickets/${id}/open`);
+    return response.data;
+  },
+  closeTicket: async (id: string): Promise<{ transitioned: boolean }> => {
+    const response = await api.post<{ transitioned: boolean }>(`/tickets/${id}/close`);
+    return response.data;
   },
   getComments: async (id: string): Promise<any[]> => {
     const response = await api.get(`/tickets/${id}/comments`);
@@ -176,6 +259,56 @@ export const ticketsService = {
     const response = await api.post('/tickets/analyze-image', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
+    return response.data;
+  },
+  draftSmartDocument: async (data: SmartDocumentDraftDto): Promise<{ content: string }> => {
+    const response = await api.post<{ content: string }>('/tickets/smart-document/draft', data);
+    return response.data;
+  },
+  saveSmartDocument: async (
+    ticketId: string,
+    payload: { content: string; title?: string },
+  ): Promise<{ success: boolean; message: string }> => {
+    const response = await api.post(`/tickets/${ticketId}/smart-document/save`, payload);
+    return response.data;
+  },
+  generatePdf: async (ticketId: string): Promise<ArrayBuffer> => {
+    const response = await api.get(`/tickets/${ticketId}/generate-pdf`, {
+      responseType: 'arraybuffer',
+    });
+    return response.data;
+  },
+  getStats: async (): Promise<{
+    dashboard: {
+      nuevos: number;
+      enProceso: number;
+      completados: number;
+      cerrados: number;
+      cancelados: number;
+      vencidos: number;
+      overdue: number;
+      pending: number;
+      nuevosTemas: number;
+      continuaciones: number;
+    };
+    kpis: {
+      total: number;
+      pending: number;
+      completed: number;
+      urgent: number;
+      avgResponseHours?: number;
+    };
+    byCategory: { name: string; value: number }[];
+    byUser: { name: string; tickets: number }[];
+    bySender?: { name: string; value: number }[];
+    byRecipient?: { name: string; value: number }[];
+    byLocation?: { name: string; value: number }[];
+    byPriority: { name: string; value: number }[];
+    byMessageType: { name: string; value: number }[];
+    evolution: { name: string; creados: number; cerrados: number }[];
+    avgResponseHours?: number;
+  }> => {
+    const response = await api.get('/tickets/stats');
     return response.data;
   },
 };

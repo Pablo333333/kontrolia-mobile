@@ -8,6 +8,20 @@ export const useCategories = () => {
   });
 };
 
+export const useSubcategories = () => {
+  return useQuery({
+    queryKey: ['subcategories'],
+    queryFn: catalogService.getSubcategories,
+  });
+};
+
+export const useTeamSettings = () => {
+  return useQuery({
+    queryKey: ['team-settings'],
+    queryFn: catalogService.getTeamSettings,
+  });
+};
+
 export const useWorkflowStates = () => {
   return useQuery({
     queryKey: ['workflow-states'],
@@ -19,5 +33,12 @@ export const useUsers = () => {
   return useQuery({
     queryKey: ['users'],
     queryFn: catalogService.getUsers,
+  });
+};
+
+export const useMyPreferences = () => {
+  return useQuery({
+    queryKey: ['my-preferences'],
+    queryFn: catalogService.getMyPreferences,
   });
 };

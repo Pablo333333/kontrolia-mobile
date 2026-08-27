@@ -1,9 +1,11 @@
 import { useFonts } from 'expo-font';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { addNotificationResponseListener, registerForPushNotifications } from '@/features/notifications/push.service';
 import * as SplashScreen from 'expo-splash-screen';
+import * as SecureStore from 'expo-secure-store';
 
 import { useColorScheme } from '@/components/useColorScheme';
 import { initDatabase } from '@/lib/database';
@@ -11,12 +13,11 @@ import { SyncIndicator } from '@/components/SyncIndicator';
 import { GlobalErrorBoundary } from '@/components/GlobalErrorBoundary';
 import { AuthProvider } from '@/features/auth/context/AuthProvider';
 import { logError } from '@/lib/logger';
-import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity } from 'react-native';
 
 const queryClient = new QueryClient();
 
 export {
-  // Catch any errors thrown by the Layout component.
   ErrorBoundary,
 } from 'expo-router';
 
@@ -31,6 +32,15 @@ async function hideSplash() {
     await SplashScreen.hideAsync();
   } catch {
     // Ya oculta o nativa aún no lista
+  }
+}
+
+async function clearSessionStorage() {
+  try {
+    await SecureStore.deleteItemAsync('token');
+    await SecureStore.deleteItemAsync('user');
+  } catch {
+    // ignore
   }
 }
 
@@ -78,7 +88,6 @@ function RootLayoutContent({
   useEffect(() => {
     let cancelled = false;
 
-    // Si fuentes o DB se cuelgan en release, no dejar el splash nativo para siempre.
     const safety = setTimeout(() => {
       if (!cancelled) {
         setDbReady(true);
@@ -110,11 +119,21 @@ function RootLayoutContent({
     };
   }, []);
 
+  const handleForceExit = async () => {
+    await clearSessionStorage();
+    setInitError(null);
+    setDbReady(true);
+    await hideSplash();
+  };
+
   if (initError) {
     return (
       <View style={styles.errorContainer}>
         <Text style={styles.errorTitle}>ERROR CRÍTICO</Text>
         <Text style={styles.errorText}>{initError}</Text>
+        <TouchableOpacity style={styles.exitBtn} onPress={handleForceExit}>
+          <Text style={styles.exitBtnText}>Salir y reiniciar sesión</Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -122,9 +141,13 @@ function RootLayoutContent({
   if (!dbReady) {
     return (
       <View style={styles.loadingContainer}>
+        <Text style={styles.brand}>KONTROLIA</Text>
         <ActivityIndicator size="large" color="#3b82f6" />
         <Text style={styles.loadingText}>Cargando Kontrolia...</Text>
-        {!dbReady && <Text style={styles.loadingSubtext}>Preparando base de datos...</Text>}
+        <Text style={styles.loadingSubtext}>Preparando base de datos...</Text>
+        <TouchableOpacity style={styles.exitBtnOutline} onPress={handleForceExit}>
+          <Text style={styles.exitBtnOutlineText}>Salir</Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -138,6 +161,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#ffffff',
+    padding: 24,
+  },
+  brand: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#1e3a8a',
+    marginBottom: 24,
+    letterSpacing: 1,
   },
   loadingText: {
     marginTop: 12,
@@ -168,10 +199,48 @@ const styles = StyleSheet.create({
     color: '#b91c1c',
     textAlign: 'center',
   },
+  exitBtn: {
+    marginTop: 24,
+    backgroundColor: '#991b1b',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 10,
+  },
+  exitBtnText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 15,
+  },
+  exitBtnOutline: {
+    marginTop: 32,
+    paddingHorizontal: 24,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#94a3b8',
+  },
+  exitBtnOutlineText: {
+    color: '#475569',
+    fontWeight: '600',
+    fontSize: 14,
+  },
 });
 
 function RootLayoutNav() {
   const colorScheme = useColorScheme();
+  const router = useRouter();
+
+  useEffect(() => {
+    registerForPushNotifications().catch(() => undefined);
+
+    const subscription = addNotificationResponseListener((data) => {
+      if (data.entityType === 'TICKET' && data.entityId) {
+        router.push(`/tickets/${data.entityId}`);
+      }
+    });
+
+    return () => subscription.remove();
+  }, [router]);
 
   return (
     <AuthProvider>
@@ -183,9 +252,19 @@ function RootLayoutNav() {
             <Stack.Screen name="login" options={{ headerShown: false }} />
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
             <Stack.Screen name="new-ticket" options={{
-              title: 'Nuevo Ticket',
+              title: 'Nuevo tema de comunicación',
               presentation: 'modal',
               headerShown: true
+            }} />
+            <Stack.Screen name="smart-document" options={{
+              title: 'Redacción inteligente',
+              presentation: 'modal',
+              headerShown: true,
+            }} />
+            <Stack.Screen name="team-settings" options={{
+              title: 'Configuración',
+              presentation: 'modal',
+              headerShown: true,
             }} />
           </Stack>
         </ThemeProvider>

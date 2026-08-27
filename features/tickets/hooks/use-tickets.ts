@@ -1,10 +1,42 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ticketsService, CreateTicketDto } from '../services/tickets.service';
 
-export const useTickets = () => {
+type TicketsQueryParams = {
+  includeArchived?: boolean;
+  workflowStateId?: string;
+  categoryId?: string;
+  subcategoryId?: string;
+  priority?: string;
+  messageType?: string;
+  userId?: string;
+  destinatarioId?: string;
+};
+
+export const useTickets = (params?: TicketsQueryParams & { enabled?: boolean }) => {
+  const { enabled = true, ...filters } = params ?? {};
   return useQuery({
-    queryKey: ['tickets'],
-    queryFn: ticketsService.findAll,
+    queryKey: ['tickets', filters],
+    queryFn: () => ticketsService.findAll(filters),
+    enabled,
+    staleTime: 20_000,
+  });
+};
+
+export const useArchivedTickets = (options?: { enabled?: boolean }) => {
+  return useQuery({
+    queryKey: ['tickets', { includeArchived: true }],
+    queryFn: () => ticketsService.findAll({ includeArchived: true }),
+    enabled: options?.enabled ?? true,
+    staleTime: 30_000,
+  });
+};
+
+export const useTicketStats = () => {
+  return useQuery({
+    queryKey: ['tickets', 'stats'],
+    queryFn: () => ticketsService.getStats(),
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
   });
 };
 
@@ -16,13 +48,40 @@ export const useTicket = (id: string) => {
   });
 };
 
-export const useCreateTicket = (options?: { onSuccess?: () => void }) => {
+export const useOpenTicket = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => ticketsService.openTicket(id),
+    onSuccess: (_data, id) => {
+      queryClient.invalidateQueries({ queryKey: ['tickets', id] });
+      queryClient.invalidateQueries({ queryKey: ['tickets'] });
+      queryClient.invalidateQueries({ queryKey: ['tickets', id, 'history'] });
+    },
+  });
+};
+
+export const useCloseTicket = (id: string) => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => ticketsService.closeTicket(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tickets', id] });
+      queryClient.invalidateQueries({ queryKey: ['tickets'] });
+      queryClient.invalidateQueries({ queryKey: ['tickets', id, 'history'] });
+    },
+  });
+};
+
+export const useCreateTicket = (options?: { onSuccess?: () => void; onError?: () => void }) => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (data: CreateTicketDto) => ticketsService.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tickets'] });
       options?.onSuccess?.();
+    },
+    onError: () => {
+      options?.onError?.();
     },
   });
 };
@@ -41,6 +100,9 @@ export const useCreateTicketComment = (id: string) => {
     mutationFn: (content: string) => ticketsService.createComment(id, content),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tickets', id, 'comments'] });
+      queryClient.invalidateQueries({ queryKey: ['tickets', id] });
+      queryClient.invalidateQueries({ queryKey: ['tickets'] });
+      queryClient.invalidateQueries({ queryKey: ['tickets', id, 'history'] });
     },
   });
 };
@@ -56,7 +118,7 @@ export const useTicketDocuments = (id: string) => {
 export const useUploadTicketDocument = (id: string) => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ uri, name, type }: { uri: string; name: string; type: string }) => 
+    mutationFn: ({ uri, name, type }: { uri: string; name: string; type: string }) =>
       ticketsService.uploadDocument(id, uri, name, type),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tickets', id, 'documents'] });
@@ -84,7 +146,7 @@ export const useSummarizeTicket = (id: string) => {
 
 export const useAnalyzeTicketImage = () => {
   return useMutation({
-    mutationFn: ({ uri, name, type }: { uri: string; name: string; type: string }) => 
+    mutationFn: ({ uri, name, type }: { uri: string; name: string; type: string }) =>
       ticketsService.analyzeImage(uri, name, type),
   });
 };
